@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="tr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finans Takip</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col antialiased">
+
+    <!-- Başlangıç Modal Ekranı -->
+    <div id="startupModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+        <div class="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 md:p-8 text-center border border-slate-800 animate-fade-in">
+            <div class="w-20 h-20 bg-indigo-500/10 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner text-3xl border border-indigo-500/20">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-100 mb-2">Finans Takip</h1>
+            <p class="text-slate-400 text-sm mb-8 leading-relaxed">Verileriniz güvenle yerel JSON dosyanızda saklanır. Başlamak için lütfen bir seçenek belirleyin.</p>
+            
+            <div class="space-y-3.5">
+                <button onclick="connectExistingJSON()" class="w-full flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-medium py-3.5 px-6 rounded-2xl shadow-lg shadow-indigo-950 transition-all">
+                    <i class="fa-solid fa-folder-open text-lg"></i>
+                    <span>Mevcut JSON Dosyasını Bağla</span>
+                </button>
+                <button onclick="createNewJSON()" class="w-full flex items-center justify-center gap-3 bg-slate-800 hover:bg-slate-750 active:scale-[0.98] text-slate-200 font-medium py-3.5 px-6 rounded-2xl border border-slate-700 transition-all">
+                    <i class="fa-solid fa-file-circle-plus text-lg text-indigo-400"></i>
+                    <span>Yeni Boş JSON Dosyası Oluştur</span>
+                </button>
+            </div>
+            <p id="fileSupportNotice" class="text-xs text-slate-500 mt-6 hidden">Tarayıcınız File System API desteklemiyor. Dosya seçiminden sonra otomatik indirme ile çalışılacak.</p>
+        </div>
+    </div>
+
+    <!-- Ana Uygulama Kabuğu -->
+    <div id="appContainer" class="flex-1 flex flex-col max-w-md w-full mx-auto p-4 md:p-6 overflow-y-auto hidden">
+        
+        <!-- Üst Logo ve Başlık -->
+        <header class="text-center py-4 mb-2">
+        <div class="bg-[#1e293b] border border-[#334155] rounded-2xl shadow-2xl w-full max-w-md p-6 text-center transform transition-all">
+            <div class="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+                <i class="fa-solid fa-wallet"></i>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-extrabold text-slate-100 tracking-tight">Finans Takip</h1>
+            <p id="activeFileName" class="text-xs text-slate-400 mt-1 truncate max-w-[260px] mx-auto">Dosya: Bağlı değil</p>
+        </header>
+
+        <!-- Ekle ve Ayarlar Düğmeleri Kutusu (Eşit Genişlikte) -->
+        <div class="bg-slate-900 rounded-2xl p-3 shadow-lg border border-slate-800 flex items-center gap-3 mb-4">
+            <button onclick="openAddModal()" class="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-indigo-950 transition-all">
+                <i class="fa-solid fa-plus text-sm"></i>
+                <span>Ekle</span>
+            </button>
+            <button onclick="openSettingsModal()" class="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-200 font-semibold py-3 px-4 rounded-xl border border-slate-700/60 transition-all">
+                <i class="fa-solid fa-gear text-sm text-indigo-400"></i>
+                <span>Ayarlar</span>
+            </button>
+        </div>
+
+        <!-- Son Durum Kutusu -->
+        <div id="statusBox" class="rounded-2xl p-5 text-white shadow-xl mb-6 transition-all duration-300 bg-slate-800 border border-slate-700">
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-medium uppercase tracking-wider opacity-85">Son Durum (Net Varlık)</span>
+                <i id="statusIcon" class="fa-solid fa-wallet text-xl opacity-90"></i>
+            </div>
+            <div id="statusAmount" class="text-2xl md:text-3xl font-bold tracking-tight">0.00 TL</div>
+            <div class="flex items-center gap-3 mt-3 pt-3 border-t border-white/10 text-xs opacity-90">
+                <div>Varlıklar: <span id="summaryAssets" class="font-semibold">0.00 TL</span></div>
+                <div>•</div>
+                <div>Net Gelir/Gider: <span id="summaryNet" class="font-semibold">0.00 TL</span></div>
+            </div>
+        </div>
+
+        <!-- Sekmeler (Tabs) -->
+        <div class="flex bg-slate-900 p-1 rounded-2xl mb-6 shadow-lg border border-slate-800">
+            <button onclick="switchTab('home')" id="tabHome" class="flex-1 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-all text-slate-100 bg-slate-800 shadow-sm border border-slate-700">
+                <i class="fa-solid fa-house mr-1.5"></i>Anasayfa
+            </button>
+            <button onclick="switchTab('past')" id="tabPast" class="flex-1 py-2.5 text-xs md:text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-clock-rotate-left mr-1.5"></i>Geçmiş
+            </button>
+            <button onclick="switchTab('future')" id="tabFuture" class="flex-1 py-2.5 text-xs md:text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-calendar-days mr-1.5"></i>Gelecek
+            </button>
+        </div>
+
+        <!-- İçerik Alanları -->
+        <div class="flex-1 flex flex-col pb-12">
+            
+            <!-- ANASAYFA SEKMESİ -->
+            <div id="viewHome" class="space-y-6">
+                <!-- Varlıklar Bölümü -->
+                <div class="bg-slate-900 rounded-2xl p-4 shadow-lg border border-slate-800">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div>
+                            <h2 class="font-bold text-slate-200 text-sm md:text-base">Varlıklar</h2>
+                        </div>
+                        <span id="countAssets" class="text-xs font-semibold px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full">0</span>
+                    </div>
+                    <div id="listAssets" class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 text-center py-4">Kayıtlı varlık bulunmuyor.</p>
+                    </div>
+                </div>
+
+                <!-- Gelirler Bölümü -->
+                <div class="bg-slate-900 rounded-2xl p-4 shadow-lg border border-slate-800">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div>
+                            <h2 class="font-bold text-slate-200 text-sm md:text-base">Gelirler</h2>
+                        </div>
+                        <span id="countIncomes" class="text-xs font-semibold px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">0</span>
+                    </div>
+                    <div id="listIncomes" class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 text-center py-4">Kayıtlı gelir bulunmuyor.</p>
+                    </div>
+                </div>
+
+                <!-- Giderler Bölümü -->
+                <div class="bg-slate-900 rounded-2xl p-4 shadow-lg border border-slate-800">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></div>
+                            <h2 class="font-bold text-slate-200 text-sm md:text-base">Giderler</h2>
+                        </div>
+                        <span id="countExpenses" class="text-xs font-semibold px-2.5 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full">0</span>
+                    </div>
+                    <div id="listExpenses" class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 text-center py-4">Kayıtlı gider bulunmuyor.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GEÇMİŞ SEKMESİ -->
+            <div id="viewPast" class="space-y-4 hidden">
+                <div class="bg-slate-900 rounded-2xl p-4 shadow-lg border border-slate-800">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                        <h2 class="font-bold text-slate-200 text-sm md:text-base"><i class="fa-solid fa-clock-rotate-left mr-2 text-indigo-400"></i>Geçmiş Kayıtlar</h2>
+                        <span id="countPast" class="text-xs font-semibold px-2.5 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded-full">0</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">Tarihi geçmiş gelir ve giderler otomatik buraya taşınır. Gelirleri tekrar Anasayfaya varlık olarak aktarabilirsiniz.</p>
+                    <div id="listPast" class="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 text-center py-6">Geçmiş kayıt bulunmuyor.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GELECEK SEKMESİ -->
+            <div id="viewFuture" class="space-y-4 hidden">
+                <div class="bg-slate-900 rounded-2xl p-4 shadow-lg border border-slate-800">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+                        <h2 class="font-bold text-slate-200 text-sm md:text-base"><i class="fa-solid fa-calendar-days mr-2 text-indigo-400"></i>Gelecek İşlemler</h2>
+                        <span id="countFuture" class="text-xs font-semibold px-2.5 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">0</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">Gelecek tarihli olarak işaretlenen işlemler burada listelenir. Aktar düğmesi ile anasayfaya işlenebilir.</p>
+                    <div id="listFuture" class="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 text-center py-6">Gelecek kayıt bulunmuyor.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODALLAR -->
+
+    <!-- Ekle / Düzenle Modal -->
+    <div id="entryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 hidden">
+        <div class="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-800 animate-fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-100">Yeni Kayıt Ekle</h3>
+                <button onclick="closeEntryModal()" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="entryForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                <input type="hidden" id="editItemId">
+                
+                <!-- Tür Seçimi (Varlık, Gelir, Gider) -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">İşlem Türü</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" onclick="selectType('asset')" id="typeBtnAsset" class="py-2.5 px-3 rounded-xl border-2 border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-xs transition-all flex flex-col items-center gap-1">
+                            <i class="fa-solid fa-vault text-base"></i> Varlık
+                        </button>
+                        <button type="button" onclick="selectType('income')" id="typeBtnIncome" class="py-2.5 px-3 rounded-xl border-2 border-slate-700 text-slate-400 font-semibold text-xs transition-all flex flex-col items-center gap-1 hover:border-emerald-500/30 hover:text-emerald-400">
+                            <i class="fa-solid fa-arrow-trend-up text-base"></i> Gelir
+                        </button>
+                        <button type="button" onclick="selectType('expense')" id="typeBtnExpense" class="py-2.5 px-3 rounded-xl border-2 border-slate-700 text-slate-400 font-semibold text-xs transition-all flex flex-col items-center gap-1 hover:border-rose-500/30 hover:text-rose-400">
+                            <i class="fa-solid fa-arrow-trend-down text-base"></i> Gider
+                        </button>
+                    </div>
+                    <input type="hidden" id="selectedType" value="asset">
+                </div>
+
+                <!-- Açıklama / Başlık -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Açıklama / Başlık</label>
+                    <input type="text" id="itemTitle" required placeholder="Örn: Maaş, Kira, Birikim..." class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-100 placeholder-slate-500">
+                </div>
+
+                <!-- Tutar -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Tutar (TL)</label>
+                    <input type="number" step="0.01" min="0.01" id="itemAmount" required placeholder="0.00" class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold text-slate-100 placeholder-slate-500">
+                </div>
+
+                <!-- Tarih Alanı (Sadece Gelir ve Gider için) -->
+                <div id="dateContainer" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">İşlem Tarihi</label>
+                    <input type="date" id="itemDate" class="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-slate-100">
+                </div>
+
+                <!-- Gelecek İşlem Tik Kutusu (Sadece Gelir ve Gider için) -->
+                <div id="futureCheckContainer" class="hidden pt-1">
+                    <label class="flex items-center gap-3 p-3 bg-indigo-950/40 border border-indigo-900/50 rounded-xl cursor-pointer hover:bg-indigo-900/40 transition-colors">
+                        <input type="checkbox" id="itemIsFuture" class="w-5 h-5 text-indigo-600 rounded border-slate-700 bg-slate-800 focus:ring-indigo-500">
+                        <div class="text-xs">
+                            <span class="font-bold text-slate-200 block">Gelecek İşlem Olarak Kaydet</span>
+                            <span class="text-slate-400">İşlem 'Gelecek' sekmesine yönlendirilir.</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-semibold py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-950 transition-all">
+                        Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Silme Onay Modal -->
+    <div id="deleteModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 hidden">
+        <div class="bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-800 animate-fade-in">
+            <div class="w-16 h-16 bg-rose-500/10 text-rose-400 rounded-3xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner border border-rose-500/20">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-lg font-bold text-slate-100 mb-2">Emin misiniz?</h3>
+            <p class="text-slate-400 text-xs mb-6">Bu kaydı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.</p>
+            <input type="hidden" id="deleteTargetId">
+            <input type="hidden" id="deleteTargetContainer">
+            <div class="flex gap-3">
+                <button onclick="closeDeleteModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 px-4 rounded-xl border border-slate-700 transition-all text-sm">
+                    Vazgeç
+                </button>
+                <button onclick="confirmDelete()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold py-3 px-4 rounded-xl shadow-md shadow-rose-950 transition-all text-sm">
+                    Evet, Sil
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ayarlar & Dosya Yönetimi Modal -->
+    <div id="settingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 hidden">
+        <div class="bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-800 animate-fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-slate-100">Ayarlar & Dosya</h3>
+                <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-4 text-xs text-slate-300">
+                <div class="p-4 bg-slate-800/60 rounded-2xl border border-slate-700/60">
+                    <div class="font-bold text-slate-200 mb-1">Bağlı JSON Dosyası</div>
+                    <div id="settingsFileName" class="text-slate-400 truncate mb-3">Henüz bağlanmadı</div>
+                    <div class="flex gap-2">
+                        <button onclick="connectExistingJSON()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium py-2 px-3 rounded-xl border border-slate-700 transition-all">
+                            Dosya Değiştir
+                        </button>
+                        <button onclick="downloadJSONFile()" class="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 font-medium py-2 px-3 rounded-xl border border-indigo-500/30 transition-all">
+                            JSON İndir (Yedek)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-indigo-950/30 rounded-2xl border border-indigo-900/40 leading-relaxed text-slate-400">
+                    <i class="fa-solid fa-circle-info text-indigo-400 mr-1.5"></i>
+                    Değişiklikleriniz seçtiğiniz JSON dosyasına anında ve otomatik olarak kaydedilir. Dosya değiştiğinde otomatik olarak ana sayfaya döner.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Uygulama JavaScript Mantığı -->
+    <script>
+        // Veri Yapısı
+        let appData = {
+            assets: [],    // Varlıklar
+            incomes: [],   // Gelirler (Anasayfa)
+            expenses: [],  // Giderler (Anasayfa)
+            past: [],      // Geçmiş Kayıtlar
+            future: []     // Gelecek İşlemler
+        };
+
+        let fileHandle = null;
+        let isFileApiSupported = ('showOpenFilePicker' in window);
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!isFileApiSupported) {
+                document.getElementById('fileSupportNotice').classList.remove('hidden');
+            }
+        });
+
+        // 1. AÇILIŞ VE DOSYA SEÇENEKLERİ
+        async function connectExistingJSON() {
+            try {
+                if (isFileApiSupported) {
+                    const [handle] = await window.showOpenFilePicker({
+                        types: [{
+                            description: 'JSON Dosyaları',
+                            accept: { 'application/json': ['.json'] }
+                        }],
+                        multiple: false
+                    });
+                    fileHandle = handle;
+                    const file = await fileHandle.getFile();
+                    const contents = await file.text();
+                    parseAndLoadData(contents, file.name);
+                } else {
+                    let input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.json';
+                    input.onchange = e => {
+                        let file = e.target.files[0];
+                        if (file) {
+                            let reader = new FileReader();
+                            reader.onload = event => {
+                                parseAndLoadData(event.target.result, file.name);
+                            };
+                            reader.readAsText(file);
+                        }
+                    };
+                    input.click();
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error(err);
+                }
+            }
+        }
+
+        async function createNewJSON() {
+            let initialData = {
+                assets: [],
+                incomes: [],
+                expenses: [],
+                past: [],
+                future: []
+            };
+
+            try {
+                if (isFileApiSupported) {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'finans_takip.json',
+                        types: [{
+                            description: 'JSON Dosyası',
+                            accept: { 'application/json': ['.json'] }
+                        }]
+                    });
+                    fileHandle = handle;
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(JSON.stringify(initialData, null, 2));
+                    await writable.close();
+                    parseAndLoadData(JSON.stringify(initialData), fileHandle.name);
+                } else {
+                    fileHandle = null;
+                    parseAndLoadData(JSON.stringify(initialData), 'finans_takip.json');
+                    saveDataToFile();
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error(err);
+                }
+            }
+        }
+
+        function parseAndLoadData(jsonString, fileName) {
+            try {
+                const parsed = JSON.parse(jsonString);
+                appData = {
+                    assets: parsed.assets || [],
+                    incomes: parsed.incomes || [],
+                    expenses: parsed.expenses || [],
+                    past: parsed.past || [],
+                    future: parsed.future || []
+                };
+
+                document.getElementById('activeFileName').innerText = `Dosya: ${fileName}`;
+                document.getElementById('settingsFileName').innerText = fileName;
+
+                // Modalları kapat, ayarları kapat ve anasayfaya dön
+                document.getElementById('startupModal').classList.add('hidden');
+                document.getElementById('settingsModal').classList.add('hidden');
+                document.getElementById('appContainer').classList.remove('hidden');
+                switchTab('home');
+
+                checkAndMovePastDates();
+                renderAll();
+            } catch (e) {
+                alert('Geçersiz JSON dosyası!');
+            }
+        }
+
+        // 2. OTOMATİK TARİH KONTROLÜ (Geçmişe Taşıma)
+        function checkAndMovePastDates() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            let changed = false;
+
+            let remainingIncomes = [];
+            appData.incomes.forEach(item => {
+                if (item.date && item.date < todayStr) {
+                    appData.past.push({
+                        ...item,
+                        originalCategory: 'income'
+                    });
+                    changed = true;
+                } else {
+                    remainingIncomes.push(item);
+                }
+            });
+            appData.incomes = remainingIncomes;
+
+            let remainingExpenses = [];
+            appData.expenses.forEach(item => {
+                if (item.date && item.date < todayStr) {
+                    appData.past.push({
+                        ...item,
+                        originalCategory: 'expense'
+                    });
+                    changed = true;
+                } else {
+                    remainingExpenses.push(item);
+                }
+            });
+            appData.expenses = remainingExpenses;
+
+            if (changed) {
+                saveDataToFile();
+            }
+        }
+
+        // 3. DOSYAYA OTOMATİK KAYIT
+        async function saveDataToFile() {
+            const jsonStr = JSON.stringify(appData, null, 2);
+            if (fileHandle && isFileApiSupported) {
+                try {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(jsonStr);
+                    await writable.close();
+                } catch (e) {
+                    console.error('Otomatik kayıt hatası:', e);
+                }
+            }
+            renderAll();
+        }
+
+        function downloadJSONFile() {
+            const jsonStr = JSON.stringify(appData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'finans_takip_yedek.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 4. SEKME YÖNETİMİ
+        function switchTab(tabName) {
+            document.getElementById('viewHome').classList.add('hidden');
+            document.getElementById('viewPast').classList.add('hidden');
+            document.getElementById('viewFuture').classList.add('hidden');
+
+            document.getElementById('tabHome').className = "flex-1 py-2.5 text-xs md:text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-slate-200 bg-transparent border border-transparent";
+            document.getElementById('tabPast').className = "flex-1 py-2.5 text-xs md:text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-slate-200 bg-transparent border border-transparent";
+            document.getElementById('tabFuture').className = "flex-1 py-2.5 text-xs md:text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-slate-200 bg-transparent border border-transparent";
+
+            if (tabName === 'home') {
+                document.getElementById('viewHome').classList.remove('hidden');
+                document.getElementById('tabHome').className = "flex-1 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-all text-slate-100 bg-slate-800 shadow-sm border border-slate-700";
+            } else if (tabName === 'past') {
+                document.getElementById('viewPast').classList.remove('hidden');
+                document.getElementById('tabPast').className = "flex-1 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-all text-slate-100 bg-slate-800 shadow-sm border border-slate-700";
+            } else if (tabName === 'future') {
+                document.getElementById('viewFuture').classList.remove('hidden');
+                document.getElementById('tabFuture').className = "flex-1 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-all text-slate-100 bg-slate-800 shadow-sm border border-slate-700";
+            }
+        }
+
+        // 5. MODAL İŞLEMLERİ (Ekle / Düzenle)
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = 'Yeni Kayıt Ekle';
+            document.getElementById('editItemId').value = '';
+            document.getElementById('itemTitle').value = '';
+            document.getElementById('itemAmount').value = '';
+            document.getElementById('itemDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('itemIsFuture').checked = false;
+            selectType('asset');
+            document.getElementById('entryModal').classList.remove('hidden');
+        }
+
+        function closeEntryModal() {
+            document.getElementById('entryModal').classList.add('hidden');
+        }
+
+        function selectType(type) {
+            document.getElementById('selectedType').value = type;
+            const btnAsset = document.getElementById('typeBtnAsset');
+            const btnIncome = document.getElementById('typeBtnIncome');
+            const btnExpense = document.getElementById('typeBtnExpense');
+            const dateContainer = document.getElementById('dateContainer');
+            const futureContainer = document.getElementById('futureCheckContainer');
+
+            btnAsset.className = "py-2.5 px-3 rounded-xl border-2 border-slate-700 text-slate-400 font-semibold text-xs transition-all flex flex-col items-center gap-1 hover:border-blue-500/30 hover:text-blue-400";
+            btnIncome.className = "py-2.5 px-3 rounded-xl border-2 border-slate-700 text-slate-400 font-semibold text-xs transition-all flex flex-col items-center gap-1 hover:border-emerald-500/30 hover:text-emerald-400";
+            btnExpense.className = "py-2.5 px-3 rounded-xl border-2 border-slate-700 text-slate-400 font-semibold text-xs transition-all flex flex-col items-center gap-1 hover:border-rose-500/30 hover:text-rose-400";
+
+            if (type === 'asset') {
+                btnAsset.className = "py-2.5 px-3 rounded-xl border-2 border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-xs transition-all flex flex-col items-center gap-1";
+                dateContainer.classList.add('hidden');
+                futureContainer.classList.add('hidden');
+            } else if (type === 'income') {
+                btnIncome.className = "py-2.5 px-3 rounded-xl border-2 border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-semibold text-xs transition-all flex flex-col items-center gap-1";
+                dateContainer.classList.remove('hidden');
+                futureContainer.classList.remove('hidden');
+            } else if (type === 'expense') {
+                btnExpense.className = "py-2.5 px-3 rounded-xl border-2 border-rose-500/30 bg-rose-500/10 text-rose-400 font-semibold text-xs transition-all flex flex-col items-center gap-1";
+                dateContainer.classList.remove('hidden');
+                futureContainer.classList.remove('hidden');
+            }
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            const editId = document.getElementById('editItemId').value;
+            const type = document.getElementById('selectedType').value;
+            const title = document.getElementById('itemTitle').value.trim();
+            const amount = parseFloat(document.getElementById('itemAmount').value);
+            const date = (type === 'asset') ? null : document.getElementById('itemDate').value;
+            const isFuture = (type === 'asset') ? false : document.getElementById('itemIsFuture').checked;
+
+            if (!title || isNaN(amount)) return;
+
+            const newItem = {
+                id: editId ? editId : 'item_' + Date.now() + Math.random().toString(36).substring(2, 9),
+                title: title,
+                amount: amount,
+                date: date
+            };
+
+            if (editId) {
+                removeItemById(editId);
+            }
+
+            if (isFuture) {
+                newItem.originalType = type;
+                appData.future.push(newItem);
+            } else {
+                if (type === 'asset') {
+                    appData.assets.push(newItem);
+                } else if (type === 'income') {
+                    appData.incomes.push(newItem);
+                } else if (type === 'expense') {
+                    appData.expenses.push(newItem);
+                }
+            }
+
+            closeEntryModal();
+            saveDataToFile();
+        }
+
+        function removeItemById(id) {
+            appData.assets = appData.assets.filter(i => i.id !== id);
+            appData.incomes = appData.incomes.filter(i => i.id !== id);
+            appData.expenses = appData.expenses.filter(i => i.id !== id);
+            appData.past = appData.past.filter(i => i.id !== id);
+            appData.future = appData.future.filter(i => i.id !== id);
+        }
+
+        // 6. DÜZENLEME VE SİLME
+        function openEditModal(id, containerName) {
+            let item = null;
+            let list = appData[containerName];
+            if (list) {
+                item = list.find(i => i.id === id);
+            }
+            if (!item) {
+                for (let key in appData) {
+                    let found = appData[key].find(i => i.id === id);
+                    if (found) { item = found; break; }
+                }
+            }
+            if (!item) return;
+
+            document.getElementById('modalTitle').innerText = 'Kaydı Düzenle';
+            document.getElementById('editItemId').value = item.id;
+            document.getElementById('itemTitle').value = item.title;
+            document.getElementById('itemAmount').value = item.amount;
+
+            let inferredType = 'asset';
+            if (containerName === 'incomes' || item.originalType === 'income') inferredType = 'income';
+            if (containerName === 'expenses' || item.originalType === 'expense') inferredType = 'expense';
+            if (containerName === 'assets') inferredType = 'asset';
+            if (containerName === 'past') inferredType = item.originalCategory || 'income';
+
+            selectType(inferredType);
+
+            if (inferredType !== 'asset') {
+                document.getElementById('itemDate').value = item.date || new Date().toISOString().split('T')[0];
+                document.getElementById('itemIsFuture').checked = (containerName === 'future');
+            }
+
+            document.getElementById('entryModal').classList.remove('hidden');
+        }
+
+        function promptDelete(id, containerName) {
+            document.getElementById('deleteTargetId').value = id;
+            document.getElementById('deleteTargetContainer').value = containerName;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+
+        function confirmDelete() {
+            const id = document.getElementById('deleteTargetId').value;
+            removeItemById(id);
+            closeDeleteModal();
+            saveDataToFile();
+        }
+
+        // 7. AKTAR İŞLEMLERİ (Geçmişten veya Gelecekten Anasayfaya)
+        function transferItem(id, fromContainer) {
+            let item = appData[fromContainer].find(i => i.id === id);
+            if (!item) return;
+
+            appData[fromContainer] = appData[fromContainer].filter(i => i.id !== id);
+
+            let transferredItem = {
+                id: 'item_' + Date.now(),
+                title: item.title + ' (Aktarıldı)',
+                amount: item.amount
+            };
+            appData.assets.push(transferredItem);
+
+            saveDataToFile();
+        }
+
+        function transferFutureItem(id) {
+            let item = appData.future.find(i => i.id === id);
+            if (!item) return;
+
+            appData.future = appData.future.filter(i => i.id !== id);
+
+            let transferredItem = {
+                id: 'item_' + Date.now(),
+                title: item.title,
+                amount: item.amount,
+                date: new Date().toISOString().split('T')[0]
+            };
+
+            if (item.originalType === 'income') {
+                appData.incomes.push(transferredItem);
+            } else if (item.originalType === 'expense') {
+                appData.expenses.push(transferredItem);
+            }
+
+            saveDataToFile();
+        }
+
+        // 8. RENDER VE HESAPLAMA
+        function renderAll() {
+            appData.incomes.sort((a, b) => (a.date || '') > (b.date || '') ? 1 : -1);
+            appData.expenses.sort((a, b) => (a.date || '') > (b.date || '') ? 1 : -1);
+            appData.future.sort((a, b) => (a.date || '') > (b.date || '') ? 1 : -1);
+
+            renderList('assets', 'listAssets', 'countAssets', 'blue');
+            renderList('incomes', 'listIncomes', 'countIncomes', 'emerald');
+            renderList('expenses', 'listExpenses', 'countExpenses', 'rose');
+            renderPastList();
+            renderFutureList();
+
+            updateStatusBox();
+        }
+
+        function renderList(categoryKey, elementId, countId, colorTheme) {
+            const container = document.getElementById(elementId);
+            const countBadge = document.getElementById(countId);
+            const items = appData[categoryKey];
+
+            countBadge.innerText = items.length;
+
+            if (items.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 text-center py-4">Kayıt bulunmuyor.</p>`;
+                return;
+            }
+
+            let html = '';
+            items.forEach(item => {
+                let borderClass = colorTheme === 'blue' ? 'border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/10' :
+                                  colorTheme === 'emerald' ? 'border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10' :
+                                  'border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10';
+                
+                let textClass = colorTheme === 'blue' ? 'text-blue-400' :
+                                colorTheme === 'emerald' ? 'text-emerald-400' : 'text-rose-400';
+
+                html += `
+                    <div class="flex items-center justify-between p-3 rounded-xl border ${borderClass} transition-all">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <h4 class="font-semibold text-slate-200 text-xs md:text-sm truncate">${escapeHtml(item.title)}</h4>
+                            <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
+                                ${item.date ? `<span><i class="fa-regular fa-calendar mr-1"></i>${item.date}</span>` : '<span>Varlık</span>'}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold text-xs md:text-sm ${textClass}">${formatMoney(item.amount)} TL</span>
+                            <div class="flex items-center gap-1">
+                                <button onclick="openEditModal('${item.id}', '${categoryKey}')" class="w-7 h-7 rounded-lg bg-slate-800 shadow-sm border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 transition-colors" title="Düzenle">
+                                    <i class="fa-solid fa-pen text-[10px]"></i>
+                                </button>
+                                <button onclick="promptDelete('${item.id}', '${categoryKey}')" class="w-7 h-7 rounded-lg bg-slate-800 shadow-sm border border-slate-700 flex items-center justify-center text-slate-400 hover:text-rose-400 transition-colors" title="Sil">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderPastList() {
+            const container = document.getElementById('listPast');
+            const countBadge = document.getElementById('countPast');
+            const items = appData.past;
+
+            countBadge.innerText = items.length;
+
+            if (items.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 text-center py-6">Geçmiş kayıt bulunmuyor.</p>`;
+                return;
+            }
+
+            let html = '';
+            items.forEach(item => {
+                let isIncome = (item.originalCategory === 'income');
+                let badgeColor = isIncome ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+                let typeText = isIncome ? 'Gelir (Geçmiş)' : 'Gider (Geçmiş)';
+
+                html += `
+                    <div class="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-slate-800/40 transition-all">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}">${typeText}</span>
+                                <span class="text-[11px] text-slate-500">${item.date || ''}</span>
+                            </div>
+                            <h4 class="font-semibold text-slate-200 text-xs md:text-sm truncate">${escapeHtml(item.title)}</h4>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold text-xs md:text-sm text-slate-300">${formatMoney(item.amount)} TL</span>
+                            <div class="flex items-center gap-1">
+                                ${isIncome ? `
+                                <button onclick="transferItem('${item.id}', 'past')" class="h-7 px-2.5 rounded-lg bg-indigo-600 text-white shadow-sm flex items-center gap-1 text-[11px] font-medium hover:bg-indigo-500 transition-colors" title="Varlık olarak aktar">
+                                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Aktar
+                                </button>
+                                ` : ''}
+                                <button onclick="openEditModal('${item.id}', 'past')" class="w-7 h-7 rounded-lg bg-slate-800 shadow-sm border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 transition-colors" title="Düzenle">
+                                    <i class="fa-solid fa-pen text-[10px]"></i>
+                                </button>
+                                <button onclick="promptDelete('${item.id}', 'past')" class="w-7 h-7 rounded-lg bg-slate-800 shadow-sm border border-slate-700 flex items-center justify-center text-slate-400 hover:text-rose-400 transition-colors" title="Sil">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function renderFutureList() {
+            const container = document.getElementById('listFuture');
+            const countBadge = document.getElementById('countFuture');
+            const items = appData.future;
+
+            countBadge.innerText = items.length;
+
+            if (items.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 text-center py-6">Gelecek kayıt bulunmuyor.</p>`;
+                return;
+            }
+
+            let html = '';
+            items.forEach(item => {
+                let isIncome = (item.originalType === 'income');
+                let badgeColor = isIncome ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+                let typeText = isIncome ? 'Gelecek Gelir' : 'Gelecek Gider';
+
+                html += `
+                    <div class="flex items-center justify-between p-3 rounded-xl border border-indigo-500/20 bg-indigo-950/20 transition-all">
+                        <div class="min-w-0 flex-1 pr-2">
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}">${typeText}</span>
+                                <span class="text-[11px] text-indigo-400 font-medium"><i class="fa-regular fa-calendar mr-1"></i>${item.date || ''}</span>
+                            </div>
+                            <h4 class="font-semibold text-slate-200 text-xs md:text-sm truncate">${escapeHtml(item.title)}</h4>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold text-xs md:text-sm text-slate-300">${formatMoney(item.amount)} TL</span>
+                            <div class="flex items-center gap-1">
+                                <button onclick="transferFutureItem('${item.id}')" class="h-7 px-2.5 rounded-lg bg-indigo-600 text-white shadow-sm flex items-center gap-1 text-[11px] font-medium hover:bg-indigo-500 transition-colors" title="Anasayfaya aktar">
+                                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Aktar
+                                </button>
+                                <button onclick="openEditModal('${item.id}', 'future')" class="w-7 h-7 rounded-lg bg-slate-800 shadow-sm border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 transition-colors" title="Düzenle">
+                                    <i class="fa-solid fa-pen text-[10px]"></i>
+                                </button>
+                                <button onclick="promptDelete('${item.id}', 'future')" class="w-7 h-7 rounded-lg bg-slate-800 shadow-sm border border-slate-700 flex items-center justify-center text-slate-400 hover:text-rose-400 transition-colors" title="Sil">
+                                    <i class="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function updateStatusBox() {
+            let totalAssets = appData.assets.reduce((acc, item) => acc + item.amount, 0);
+            let totalIncomes = appData.incomes.reduce((acc, item) => acc + item.amount, 0);
+            let totalExpenses = appData.expenses.reduce((acc, item) => acc + item.amount, 0);
+            
+            let netIncomeExpense = totalIncomes - totalExpenses;
+            let netTotal = totalAssets + netIncomeExpense;
+
+            document.getElementById('summaryAssets').innerText = formatMoney(totalAssets) + ' TL';
+            document.getElementById('summaryNet').innerText = formatMoney(netIncomeExpense) + ' TL';
+            document.getElementById('statusAmount').innerText = formatMoney(netTotal) + ' TL';
+
+            const statusBox = document.getElementById('statusBox');
+            const statusIcon = document.getElementById('statusIcon');
+
+            if (netTotal > 0) {
+                statusBox.className = "rounded-2xl p-5 text-white shadow-xl mb-6 transition-all duration-300 bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-950 border border-emerald-500/30";
+                statusIcon.className = "fa-solid fa-circle-check text-xl opacity-90";
+            } else if (netTotal < 0) {
+                statusBox.className = "rounded-2xl p-5 text-white shadow-xl mb-6 transition-all duration-300 bg-gradient-to-tr from-rose-600 to-pink-600 shadow-rose-950 border border-rose-500/30";
+                statusIcon.className = "fa-solid fa-triangle-exclamation text-xl opacity-90";
+            } else {
+                statusBox.className = "rounded-2xl p-5 text-white shadow-xl mb-6 transition-all duration-300 bg-slate-800 border border-slate-700 shadow-slate-950";
+                statusIcon.className = "fa-solid fa-wallet text-xl opacity-90";
+            }
+        }
+
+        function formatMoney(amount) {
+            return amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
